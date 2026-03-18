@@ -45,6 +45,7 @@ type Entry struct {
 	Audience        string
 	UseRegionalSTS  bool
 	TokenExpiration int64
+	AwsConfigSecretName string
 }
 
 type Request struct {
@@ -64,6 +65,7 @@ type Response struct {
 	TokenExpiration int64
 	FoundInCache    bool
 	Notifier        <-chan struct{}
+	AwsConfigSecretName string
 }
 
 type ServiceAccountCache interface {
@@ -88,6 +90,7 @@ type serviceAccountCache struct {
 	defaultTokenExpiration int64
 	webhookUsage           prometheus.Gauge
 	notifications          *notifications
+	awsConfigSecretName    string
 }
 
 type ComposeRoleArn struct {
@@ -132,6 +135,7 @@ func (c *serviceAccountCache) Get(req Request) Response {
 			result.Audience = entry.Audience
 			result.UseRegionalSTS = entry.UseRegionalSTS
 			result.TokenExpiration = entry.TokenExpiration
+			result.AwsConfigSecretName = entry.AwsConfigSecretName
 			return result
 		}
 	}
@@ -146,6 +150,7 @@ func (c *serviceAccountCache) Get(req Request) Response {
 			result.Audience = entry.Audience
 			result.UseRegionalSTS = entry.UseRegionalSTS
 			result.TokenExpiration = entry.TokenExpiration
+			result.AwsConfigSecretName = entry.AwsConfigSecretName
 			return result
 		}
 	}
@@ -230,6 +235,11 @@ func (c *serviceAccountCache) addSA(sa *v1.ServiceAccount) {
 		entry.RoleARN = arn
 	}
 
+	awsConfigSecretNameStr, ok := sa.Annotations[c.annotationPrefix+"/"+pkg.AwsConfigSecretNameAnnotation]
+	if ok {
+		resp.AwsConfigSecretName = awsConfigSecretNameStr
+	}
+
 	entry.Audience = c.defaultAudience
 	if audience, ok := sa.Annotations[c.annotationPrefix+"/"+pkg.AudienceAnnotation]; ok {
 		entry.Audience = audience
@@ -253,6 +263,7 @@ func (c *serviceAccountCache) addSA(sa *v1.ServiceAccount) {
 			entry.TokenExpiration = pkg.ValidateMinTokenExpiration(tokenExpiration)
 		}
 	}
+
 	c.webhookUsage.Set(1)
 
 	c.setSA(sa.Name, sa.Namespace, entry)
@@ -284,6 +295,7 @@ func New(defaultAudience,
 	cmInformer coreinformers.ConfigMapInformer,
 	composeRoleArn ComposeRoleArn,
 	SAGetter corev1.ServiceAccountsGetter,
+	awsSecretName string,
 ) ServiceAccountCache {
 	hasSynced := func() bool {
 		if cmInformer != nil {
@@ -307,6 +319,7 @@ func New(defaultAudience,
 		hasSynced:              hasSynced,
 		webhookUsage:           webhookUsage,
 		notifications:          newNotifications(saFetchRequests),
+		awsConfigSecretName:    awsSecretName,
 	}
 
 	// Rate limiting at 10 requests per second with burst to 20.

@@ -27,4 +27,8 @@ const (
 	// AWS SDK defined environment variables.
 	AwsEnvVarContainerCredentialsFullUri     = "AWS_CONTAINER_CREDENTIALS_FULL_URI"
 	AwsEnvVarContainerAuthorizationTokenFile = "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE"
+
+	// AWS config file path
+	DefaultAwsConfigMountPath = "/var/run/secrets/k8s.onetag.net/aws-config"
+	DefaultAwsConfigVolName   = "config"
 )

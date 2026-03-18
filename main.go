@@ -29,6 +29,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/amazon-eks-pod-identity-webhook/pkg/containercredentials"
+
 	"github.com/aws/amazon-eks-pod-identity-webhook/pkg"
 	"github.com/aws/amazon-eks-pod-identity-webhook/pkg/cache"
 	cachedebug "github.com/aws/amazon-eks-pod-identity-webhook/pkg/cache/debug"

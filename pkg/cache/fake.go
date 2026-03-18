@@ -33,7 +33,9 @@ func NewFakeServiceAccountCache(accounts ...*v1.ServiceAccount) *FakeServiceAcco
 			tokenExpiration = pkg.DefaultTokenExpiration // Otherwise default would be 0
 		}
 
-		c.Add(sa.Name, sa.Namespace, arn, audience, regionalSTS, tokenExpiration)
+		awsConfigSecretNameStr, _ := sa.Annotations["eks.amazonaws.com/"+pkg.AwsConfigSecretNameAnnotation]
+
+		c.Add(sa.Name, sa.Namespace, arn, audience, regionalSTS, tokenExpiration, awsConfigSecretNameStr)
 	}
 	return c
 }
@@ -57,6 +59,7 @@ func (f *FakeServiceAccountCache) Get(req Request) Response {
 		UseRegionalSTS:  resp.UseRegionalSTS,
 		TokenExpiration: resp.TokenExpiration,
 		FoundInCache:    true,
+		AwsConfigSecretName: resp.AwsConfigSecretName,
 	}
 }
 
@@ -71,7 +74,7 @@ func (f *FakeServiceAccountCache) GetCommonConfigurations(name, namespace string
 }
 
 // Add adds a cache entry
-func (f *FakeServiceAccountCache) Add(name, namespace, role, aud string, regionalSTS bool, tokenExpiration int64) {
+func (f *FakeServiceAccountCache) Add(name, namespace, role, aud string, regionalSTS bool, tokenExpiration int64, awsConfigSecretName string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.cache[namespace+"/"+name] = &Entry{
@@ -79,6 +82,7 @@ func (f *FakeServiceAccountCache) Add(name, namespace, role, aud string, regiona
 		Audience:        aud,
 		UseRegionalSTS:  regionalSTS,
 		TokenExpiration: tokenExpiration,
+		AwsConfigSecretName: awsConfigSecretName,
 	}
 }
 

@@ -134,10 +134,17 @@ type podPatchConfig struct {
 	TokenPath                       string
 	WebIdentityPatchConfig          *webIdentityPatchConfig
 	ContainerCredentialsPatchConfig *containercredentials.PatchConfig
+	AwsConfigPatchconfig            *awsConfigPatchconfig
 }
 
 type webIdentityPatchConfig struct {
 	RoleArn string
+}
+
+type awsConfigPatchconfig struct {
+	secretName string
+	volName    string
+	mountPath  string
 }
 
 func logContext(podName, podGenerateName, serviceAccountName, namespace string) string {
@@ -212,6 +219,7 @@ func (m *Modifier) addEnvToContainer(container *corev1.Container, tokenFilePath 
 	if ((patchConfig.WebIdentityPatchConfig != nil && webIdentityKeysDefined) ||
 		(patchConfig.ContainerCredentialsPatchConfig != nil && containerCredentialsKeysDefined)) &&
 		regionKeyDefined && regionalStsKeyDefined {
+		klog.Infof("No Env appended")
 		klog.V(4).Infof("Container %s has necessary env variables already present", container.Name)
 		return false
 	}
@@ -250,7 +258,7 @@ func (m *Modifier) addEnvToContainer(container *corev1.Container, tokenFilePath 
 			})
 			changed = true
 		}
-	} else if patchConfig.WebIdentityPatchConfig != nil {
+	} else if patchConfig.WebIdentityPatchConfig != nil && patchConfig.WebIdentityPatchConfig.RoleArn != "" {
 		if !webIdentityKeysDefined {
 			env = append(env, corev1.EnvVar{
 				Name:  "AWS_ROLE_ARN",
@@ -264,12 +272,24 @@ func (m *Modifier) addEnvToContainer(container *corev1.Container, tokenFilePath 
 		}
 	}
 
+	if patchConfig.AwsConfigPatchconfig != nil && patchConfig.AwsConfigPatchconfig.mountPath != "" && patchConfig.AwsConfigPatchconfig.secretName != "" && patchConfig.AwsConfigPatchconfig.volName != "" {
+		env = append(env, corev1.EnvVar{
+			Name:  "AWS_CONFIG_FILE",
+			Value: pkg.DefaultAwsConfigMountPath + "/config",
+		})
+		changed = true
+	}
+
 	container.Env = env
 
 	volExists := false
+	awsConfigVolExists := false
 	for _, vol := range container.VolumeMounts {
 		if vol.Name == patchConfig.VolumeName {
 			volExists = true
+		}
+		if patchConfig.AwsConfigPatchconfig != nil && vol.Name == patchConfig.AwsConfigPatchconfig.volName {
+			awsConfigVolExists = true
 		}
 	}
 
@@ -278,6 +298,14 @@ func (m *Modifier) addEnvToContainer(container *corev1.Container, tokenFilePath 
 			Name:      patchConfig.VolumeName,
 			ReadOnly:  true,
 			MountPath: patchConfig.MountPath,
+		})
+		changed = true
+	}
+	if !awsConfigVolExists && patchConfig.AwsConfigPatchconfig != nil {
+		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+			Name:      patchConfig.AwsConfigPatchconfig.volName,
+			ReadOnly:  true,
+			MountPath: patchConfig.AwsConfigPatchconfig.mountPath,
 		})
 		changed = true
 	}
@@ -360,14 +388,29 @@ func (m *Modifier) getPodSpecPatch(pod *corev1.Pod, patchConfig *podPatchConfig)
 			},
 		},
 	}
+	var awsConfigVolume *corev1.Volume
+	if patchConfig.AwsConfigPatchconfig != nil {
+		awsConfigVolume = &corev1.Volume{
+			Name: pkg.DefaultAwsConfigVolName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: patchConfig.AwsConfigPatchconfig.secretName,
+				},
+			},
+		}
+	}
 
 	patch := []patchOperation{}
 
 	// skip adding volume if it already exists
 	volExists := false
+	awsConfigVolExists := false
 	for _, vol := range pod.Spec.Volumes {
 		if vol.Name == patchConfig.VolumeName {
 			volExists = true
+		}
+		if patchConfig.AwsConfigPatchconfig != nil && vol.Name == patchConfig.AwsConfigPatchconfig.volName {
+			awsConfigVolExists = true
 		}
 	}
 
@@ -384,6 +427,26 @@ func (m *Modifier) getPodSpecPatch(pod *corev1.Pod, patchConfig *podPatchConfig)
 				Path: "/spec/volumes",
 				Value: []corev1.Volume{
 					volume,
+				},
+			}
+		}
+
+		patch = append(patch, volPatch)
+		changed = true
+	}
+
+	if !awsConfigVolExists && awsConfigVolume != nil {
+		volPatch := patchOperation{
+			Op:    "add",
+			Path:  "/spec/volumes/1",
+			Value: *awsConfigVolume,
+		}
+		if pod.Spec.Volumes == nil {
+			volPatch = patchOperation{
+				Op:   "add",
+				Path: "/spec/volumes",
+				Value: []corev1.Volume{
+					*awsConfigVolume,
 				},
 			}
 		}
@@ -437,6 +500,7 @@ func (m *Modifier) buildPodPatchConfig(pod *corev1.Pod) *podPatchConfig {
 			TokenPath:                       containerCredentialsPatchConfig.TokenPath,
 			WebIdentityPatchConfig:          nil,
 			ContainerCredentialsPatchConfig: containerCredentialsPatchConfig,
+			AwsConfigPatchconfig:            nil,
 		}
 	}
 
@@ -465,11 +529,10 @@ func (m *Modifier) buildPodPatchConfig(pod *corev1.Pod) *podPatchConfig {
 		}
 	}
 	klog.V(5).Infof("Value of roleArn after after cache retrieval for service account %s: %s", request.CacheKey(), response.RoleARN)
-	if response.RoleARN != "" {
+	if response.RoleARN != "" && awsConfigSecretNameStr != "" {
 		tokenExpiration, containersToSkip := m.parsePodAnnotations(pod, response.TokenExpiration)
 
 		webhookPodCount.WithLabelValues("sts_web_identity").Inc()
-
 		return &podPatchConfig{
 			ContainersToSkip:                containersToSkip,
 			TokenExpiration:                 tokenExpiration,
@@ -480,6 +543,37 @@ func (m *Modifier) buildPodPatchConfig(pod *corev1.Pod) *podPatchConfig {
 			TokenPath:                       m.tokenName,
 			WebIdentityPatchConfig:          &webIdentityPatchConfig{RoleArn: response.RoleARN},
 			ContainerCredentialsPatchConfig: nil,
+			AwsConfigPatchconfig:            &awsConfigPatchconfig{secretName: awsConfigSecretNameStr, volName: pkg.DefaultAwsConfigVolName, mountPath: pkg.DefaultAwsConfigMountPath},
+		}
+	} else if roleArn != "" {
+		tokenExpiration, containersToSkip := m.parsePodAnnotations(pod, tokenExpiration)
+		webhookPodCount.WithLabelValues("sts_web_identity").Inc()
+		return &podPatchConfig{
+			ContainersToSkip:                containersToSkip,
+			TokenExpiration:                 tokenExpiration,
+			UseRegionalSTS:                  regionalSTS,
+			Audience:                        audience,
+			MountPath:                       m.MountPath,
+			VolumeName:                      m.volName,
+			TokenPath:                       m.tokenName,
+			WebIdentityPatchConfig:          &webIdentityPatchConfig{RoleArn: roleArn},
+			ContainerCredentialsPatchConfig: nil,
+			AwsConfigPatchconfig:            nil,
+		}
+	} else if awsConfigSecretNameStr != "" {
+		tokenExpiration, containersToSkip := m.parsePodAnnotations(pod, tokenExpiration)
+		webhookPodCount.WithLabelValues("sts_web_identity").Inc()
+		return &podPatchConfig{
+			ContainersToSkip:                containersToSkip,
+			TokenExpiration:                 tokenExpiration,
+			UseRegionalSTS:                  regionalSTS,
+			Audience:                        audience,
+			MountPath:                       m.MountPath,
+			VolumeName:                      m.volName,
+			TokenPath:                       m.tokenName,
+			WebIdentityPatchConfig:          nil,
+			ContainerCredentialsPatchConfig: nil,
+			AwsConfigPatchconfig:            &awsConfigPatchconfig{secretName: awsConfigSecretNameStr, volName: pkg.DefaultAwsConfigVolName, mountPath: pkg.DefaultAwsConfigMountPath},
 		}
 	}
 
@@ -528,6 +622,7 @@ func (m *Modifier) MutatePod(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionResp
 	if patchConfig == nil {
 		klog.V(4).Infof("Pod was not mutated. Reason: "+
 			"Service account did not have the right annotations or was not found in the cache. %s", logContext(pod.Name, pod.GenerateName, pod.Spec.ServiceAccountName, pod.Namespace))
+		klog.Warningf("At least one of anntotation between %s and %s in SA %s of NS %s must be defined", pkg.RoleARNAnnotation, pkg.AwsConfigSecretNameAnnotation, pod.Spec.ServiceAccountName, pod.Namespace)
 		return &v1beta1.AdmissionResponse{
 			Allowed: true,
 		}
