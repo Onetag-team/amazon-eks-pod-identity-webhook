@@ -529,7 +529,7 @@ func (m *Modifier) buildPodPatchConfig(pod *corev1.Pod) *podPatchConfig {
 		}
 	}
 	klog.V(5).Infof("Value of roleArn after after cache retrieval for service account %s: %s", request.CacheKey(), response.RoleARN)
-	if response.RoleARN != "" && awsConfigSecretNameStr != "" {
+	if response.RoleARN != "" && response.AwsConfigSecretName != "" {
 		tokenExpiration, containersToSkip := m.parsePodAnnotations(pod, response.TokenExpiration)
 
 		webhookPodCount.WithLabelValues("sts_web_identity").Inc()
@@ -543,37 +543,37 @@ func (m *Modifier) buildPodPatchConfig(pod *corev1.Pod) *podPatchConfig {
 			TokenPath:                       m.tokenName,
 			WebIdentityPatchConfig:          &webIdentityPatchConfig{RoleArn: response.RoleARN},
 			ContainerCredentialsPatchConfig: nil,
-			AwsConfigPatchconfig:            &awsConfigPatchconfig{secretName: awsConfigSecretNameStr, volName: pkg.DefaultAwsConfigVolName, mountPath: pkg.DefaultAwsConfigMountPath},
+			AwsConfigPatchconfig:            &awsConfigPatchconfig{secretName: response.AwsConfigSecretName, volName: pkg.DefaultAwsConfigVolName, mountPath: pkg.DefaultAwsConfigMountPath},
 		}
-	} else if roleArn != "" {
-		tokenExpiration, containersToSkip := m.parsePodAnnotations(pod, tokenExpiration)
+	} else if response.RoleARN != "" {
+		tokenExpiration, containersToSkip := m.parsePodAnnotations(pod, response.TokenExpiration)
 		webhookPodCount.WithLabelValues("sts_web_identity").Inc()
 		return &podPatchConfig{
 			ContainersToSkip:                containersToSkip,
 			TokenExpiration:                 tokenExpiration,
-			UseRegionalSTS:                  regionalSTS,
-			Audience:                        audience,
+			UseRegionalSTS:                  response.UseRegionalSTS,
+			Audience:                        response.Audience,
 			MountPath:                       m.MountPath,
 			VolumeName:                      m.volName,
 			TokenPath:                       m.tokenName,
-			WebIdentityPatchConfig:          &webIdentityPatchConfig{RoleArn: roleArn},
+			WebIdentityPatchConfig:          &webIdentityPatchConfig{RoleArn: response.RoleARN},
 			ContainerCredentialsPatchConfig: nil,
 			AwsConfigPatchconfig:            nil,
 		}
-	} else if awsConfigSecretNameStr != "" {
-		tokenExpiration, containersToSkip := m.parsePodAnnotations(pod, tokenExpiration)
+	} else if response.AwsConfigSecretName != "" {
+		tokenExpiration, containersToSkip := m.parsePodAnnotations(pod, response.TokenExpiration)
 		webhookPodCount.WithLabelValues("sts_web_identity").Inc()
 		return &podPatchConfig{
 			ContainersToSkip:                containersToSkip,
 			TokenExpiration:                 tokenExpiration,
-			UseRegionalSTS:                  regionalSTS,
-			Audience:                        audience,
+			UseRegionalSTS:                  response.UseRegionalSTS,
+			Audience:                        response.Audience,
 			MountPath:                       m.MountPath,
 			VolumeName:                      m.volName,
 			TokenPath:                       m.tokenName,
 			WebIdentityPatchConfig:          nil,
 			ContainerCredentialsPatchConfig: nil,
-			AwsConfigPatchconfig:            &awsConfigPatchconfig{secretName: awsConfigSecretNameStr, volName: pkg.DefaultAwsConfigVolName, mountPath: pkg.DefaultAwsConfigMountPath},
+			AwsConfigPatchconfig:            &awsConfigPatchconfig{secretName: response.AwsConfigSecretName, volName: pkg.DefaultAwsConfigVolName, mountPath: pkg.DefaultAwsConfigMountPath},
 		}
 	}
 

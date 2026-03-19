@@ -41,10 +41,10 @@ import (
 )
 
 type Entry struct {
-	RoleARN         string
-	Audience        string
-	UseRegionalSTS  bool
-	TokenExpiration int64
+	RoleARN             string
+	Audience            string
+	UseRegionalSTS      bool
+	TokenExpiration     int64
 	AwsConfigSecretName string
 }
 
@@ -59,12 +59,12 @@ func (r Request) CacheKey() string {
 }
 
 type Response struct {
-	RoleARN         string
-	Audience        string
-	UseRegionalSTS  bool
-	TokenExpiration int64
-	FoundInCache    bool
-	Notifier        <-chan struct{}
+	RoleARN             string
+	Audience            string
+	UseRegionalSTS      bool
+	TokenExpiration     int64
+	FoundInCache        bool
+	Notifier            <-chan struct{}
 	AwsConfigSecretName string
 }
 
@@ -237,7 +237,7 @@ func (c *serviceAccountCache) addSA(sa *v1.ServiceAccount) {
 
 	awsConfigSecretNameStr, ok := sa.Annotations[c.annotationPrefix+"/"+pkg.AwsConfigSecretNameAnnotation]
 	if ok {
-		resp.AwsConfigSecretName = awsConfigSecretNameStr
+		entry.AwsConfigSecretName = awsConfigSecretNameStr
 	}
 
 	entry.Audience = c.defaultAudience
@@ -295,7 +295,6 @@ func New(defaultAudience,
 	cmInformer coreinformers.ConfigMapInformer,
 	composeRoleArn ComposeRoleArn,
 	SAGetter corev1.ServiceAccountsGetter,
-	awsSecretName string,
 ) ServiceAccountCache {
 	hasSynced := func() bool {
 		if cmInformer != nil {
@@ -319,7 +318,7 @@ func New(defaultAudience,
 		hasSynced:              hasSynced,
 		webhookUsage:           webhookUsage,
 		notifications:          newNotifications(saFetchRequests),
-		awsConfigSecretName:    awsSecretName,
+		awsConfigSecretName:    "",
 	}
 
 	// Rate limiting at 10 requests per second with burst to 20.
