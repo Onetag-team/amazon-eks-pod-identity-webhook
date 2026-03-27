@@ -236,6 +236,9 @@ func (c *serviceAccountCache) addSA(sa *v1.ServiceAccount) {
 	}
 
 	awsConfigSecretNameStr, ok := sa.Annotations[c.annotationPrefix+"/"+pkg.AwsConfigSecretNameAnnotation]
+	klog.Warningf("AWS SECRET: %s", awsConfigSecretNameStr)
+	klog.Warningf("annotation: %s", c.annotationPrefix+"/"+pkg.AwsConfigSecretNameAnnotation)
+
 	if ok {
 		entry.AwsConfigSecretName = awsConfigSecretNameStr
 	}
