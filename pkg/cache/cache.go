@@ -236,10 +236,10 @@ func (c *serviceAccountCache) addSA(sa *v1.ServiceAccount) {
 	}
 
 	awsConfigSecretNameStr, ok := sa.Annotations[c.annotationPrefix+"/"+pkg.AwsConfigSecretNameAnnotation]
-	klog.Warningf("AWS SECRET: %s", awsConfigSecretNameStr)
-	klog.Warningf("annotation: %s", c.annotationPrefix+"/"+pkg.AwsConfigSecretNameAnnotation)
+	klog.V(4).Infof("AWS SECRET: %s", awsConfigSecretNameStr)
+	klog.V(4).Infof("annotation: %s", c.annotationPrefix+"/"+pkg.AwsConfigSecretNameAnnotation)
 
-	if ok {
+	if awsConfigSecretNameStr != "" {
 		entry.AwsConfigSecretName = awsConfigSecretNameStr
 	}
 
@@ -266,6 +266,8 @@ func (c *serviceAccountCache) addSA(sa *v1.ServiceAccount) {
 			entry.TokenExpiration = pkg.ValidateMinTokenExpiration(tokenExpiration)
 		}
 	}
+
+	klog.V(4).Infof("entry %v: ", entry)
 
 	c.webhookUsage.Set(1)
 
