@@ -3,11 +3,20 @@ ARG golang_image=public.ecr.aws/eks-distro-build-tooling/golang:1.25.7
 FROM --platform=$BUILDPLATFORM $golang_image AS builder
 WORKDIR $GOPATH/src/github.com/aws/amazon-eks-pod-identity-webhook
 COPY . ./
-RUN go version
-ARG TARGETOS TARGETARCH
-RUN GOPROXY=direct CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /webhook -v -a -ldflags="-buildid='' -w -s" .
 
-FROM --platform=$TARGETPLATFORM public.ecr.aws/eks-distro-build-tooling/go-runner:v0.18.0-go-1.25-latest.al2
+# Build SENZA -w -s (rimuovono i simboli di debug) e CON -N -l
+RUN GOPROXY=direct CGO_ENABLED=0 go build \
+    -gcflags="all=-N -l" \
+    -o /webhook -v .
+
+# Installa Delve
+RUN go install github.com/go-delve/delve/cmd/dlv@latest
+
+FROM --platform=$TARGETPLATFORM $golang_image
 COPY --from=builder /webhook /webhook
-ENTRYPOINT ["/go-runner"]
-CMD ["/webhook"]
+COPY --from=builder /go/bin/dlv /dlv
+
+EXPOSE 2345
+
+ENTRYPOINT ["/dlv"]
+CMD ["--listen=:2345", "--headless=true", "--api-version=2", "--accept-multiclient", "exec", "/webhook"]
