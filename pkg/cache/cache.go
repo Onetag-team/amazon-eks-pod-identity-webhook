@@ -278,6 +278,7 @@ func (c *serviceAccountCache) setSA(name, namespace string, entry *Entry) {
 
 	key := namespace + "/" + name
 	klog.V(5).Infof("Adding SA %q to SA cache: %+v", key, entry)
+	klog.V(5).Infof("aws-secret-name: %s", entry.AwsConfigSecretName)
 	c.saCache[key] = entry
 
 	c.notifications.broadcast(key)
