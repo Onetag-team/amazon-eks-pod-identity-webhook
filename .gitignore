@@ -7,3 +7,4 @@ bin
 /certs/
 SAMToolkit.*
 coverage.out
+vendor/*
