@@ -270,6 +270,9 @@ func (c *serviceAccountCache) addSA(sa *v1.ServiceAccount) {
 	c.webhookUsage.Set(1)
 
 	c.setSA(sa.Name, sa.Namespace, entry)
+	myReq := &Request{Namespace: sa.Namespace, Name: sa.Name, RequestNotification: false}
+	res, _ := c.getSA(*myReq)
+	klog.V(4).Infof("res %v", res)
 }
 
 func (c *serviceAccountCache) setSA(name, namespace string, entry *Entry) {

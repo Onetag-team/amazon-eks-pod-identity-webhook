@@ -489,7 +489,6 @@ func (m *Modifier) getPodSpecPatch(pod *corev1.Pod, patchConfig *podPatchConfig)
 func (m *Modifier) buildPodPatchConfig(pod *corev1.Pod) *podPatchConfig {
 	// Container credentials method takes precedence
 	containerCredentialsPatchConfig := m.ContainerCredentialsConfig.Get(pod.Namespace, pod.Spec.ServiceAccountName)
-	klog.V(4).Infof("containerCredentialsPatchConfig %v :", containerCredentialsPatchConfig)
 	if containerCredentialsPatchConfig != nil {
 		regionalSTS, tokenExpiration := m.Cache.GetCommonConfigurations(pod.Spec.ServiceAccountName, pod.Namespace)
 		tokenExpiration, containersToSkip, awsSecretNameStr := m.parsePodAnnotations(pod, tokenExpiration)
