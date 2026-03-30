@@ -489,6 +489,7 @@ func (m *Modifier) getPodSpecPatch(pod *corev1.Pod, patchConfig *podPatchConfig)
 func (m *Modifier) buildPodPatchConfig(pod *corev1.Pod) *podPatchConfig {
 	// Container credentials method takes precedence
 	containerCredentialsPatchConfig := m.ContainerCredentialsConfig.Get(pod.Namespace, pod.Spec.ServiceAccountName)
+	klog.V(4).Infof("containerCredentialsPatchConfig %v :", containerCredentialsPatchConfig)
 	if containerCredentialsPatchConfig != nil {
 		regionalSTS, tokenExpiration := m.Cache.GetCommonConfigurations(pod.Spec.ServiceAccountName, pod.Namespace)
 		tokenExpiration, containersToSkip, awsSecretNameStr := m.parsePodAnnotations(pod, tokenExpiration)
@@ -516,6 +517,7 @@ func (m *Modifier) buildPodPatchConfig(pod *corev1.Pod) *podPatchConfig {
 	gracePeriodEnabled := m.saLookupGraceTime > 0
 	request := cache.Request{Namespace: pod.Namespace, Name: pod.Spec.ServiceAccountName, RequestNotification: gracePeriodEnabled}
 	response := m.Cache.Get(request)
+	klog.V(4).Infof("response cache %v :", response)
 	if !response.FoundInCache && !gracePeriodEnabled {
 		missingSACounter.WithLabelValues().Inc()
 	}
@@ -542,7 +544,7 @@ func (m *Modifier) buildPodPatchConfig(pod *corev1.Pod) *podPatchConfig {
 	klog.V(5).Infof("Value of roleArn after after cache retrieval for service account %s: %s", request.CacheKey(), response.RoleARN)
 	klog.V(5).Infof("Value of awsSecretName after after cache retrieval for service account %s: %s", request.CacheKey(), response.AwsConfigSecretName)
 	if response.RoleARN != "" && response.AwsConfigSecretName != "" {
-
+		klog.V(4).Info("I'm in the 1st case")
 		webhookPodCount.WithLabelValues("sts_web_identity").Inc()
 		return &podPatchConfig{
 			ContainersToSkip:                containersToSkip,
@@ -557,7 +559,7 @@ func (m *Modifier) buildPodPatchConfig(pod *corev1.Pod) *podPatchConfig {
 			AwsConfigPatchconfig:            awsConfigPatchConfig,
 		}
 	} else if response.RoleARN != "" {
-
+		klog.V(4).Info("I'm in the 2nd case")
 		webhookPodCount.WithLabelValues("sts_web_identity").Inc()
 		return &podPatchConfig{
 			ContainersToSkip:                containersToSkip,
@@ -572,6 +574,7 @@ func (m *Modifier) buildPodPatchConfig(pod *corev1.Pod) *podPatchConfig {
 			AwsConfigPatchconfig:            nil,
 		}
 	} else if response.AwsConfigSecretName != "" {
+		klog.V(4).Info("I'm in the 3rd case")
 		webhookPodCount.WithLabelValues("sts_web_identity").Inc()
 		return &podPatchConfig{
 			ContainersToSkip:                containersToSkip,

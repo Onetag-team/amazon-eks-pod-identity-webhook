@@ -267,8 +267,6 @@ func (c *serviceAccountCache) addSA(sa *v1.ServiceAccount) {
 		}
 	}
 
-	klog.V(4).Infof("entry %v: ", entry)
-
 	c.webhookUsage.Set(1)
 
 	c.setSA(sa.Name, sa.Namespace, entry)
