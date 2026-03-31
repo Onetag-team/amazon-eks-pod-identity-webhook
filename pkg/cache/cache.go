@@ -130,7 +130,7 @@ func (c *serviceAccountCache) Get(req Request) Response {
 		if entry != nil {
 			result.FoundInCache = true
 		}
-		if entry != nil && entry.RoleARN != "" {
+		if entry != nil {
 			result.RoleARN = entry.RoleARN
 			result.Audience = entry.Audience
 			result.UseRegionalSTS = entry.UseRegionalSTS

@@ -506,7 +506,7 @@ func (m *Modifier) buildPodPatchConfig(pod *corev1.Pod) *podPatchConfig {
 
 	// Use the STS WebIdentity method if set
 	gracePeriodEnabled := m.saLookupGraceTime > 0
-	request := cache.Request{Namespace: pod.Namespace, Name: pod.Spec.ServiceAccountName, RequestNotification: gracePeriodEnabled}
+	request := cache.Request{Namespace: pod.Namespace, Name: pod.Spec.ServiceAccountName}
 	klog.V(5).Infof("request %v", request)
 	response := m.Cache.Get(request)
 	klog.V(4).Infof("response cache %v :", response)
