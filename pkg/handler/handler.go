@@ -317,12 +317,11 @@ func (m *Modifier) addEnvToContainer(container *corev1.Container, tokenFilePath 
 // setting.
 // - containersToSkip. A Pod specific setting since certain containers within a
 // specific pod might need to be opted-out of mutation
-func (m *Modifier) parsePodAnnotations(pod *corev1.Pod, serviceAccountTokenExpiration int64) (int64, map[string]bool, string) {
+func (m *Modifier) parsePodAnnotations(pod *corev1.Pod, serviceAccountTokenExpiration int64) (int64, map[string]bool) {
 	// override serviceaccount annotation/flag token expiration with pod
 	// annotation if present
 	tokenExpiration := serviceAccountTokenExpiration
 	expirationKey := m.AnnotationDomain + "/" + pkg.TokenExpirationAnnotation
-	awsSecretNameAnnotationKey := m.AnnotationDomain + "/" + pkg.AwsConfigSecretNameAnnotation
 	if expirationStr, ok := pod.Annotations[expirationKey]; ok {
 		if expiration, err := strconv.ParseInt(expirationStr, 10, 64); err != nil {
 			klog.V(4).Infof("Found invalid value for token expiration, using %d seconds as default: %v", serviceAccountTokenExpiration, err)
@@ -330,15 +329,10 @@ func (m *Modifier) parsePodAnnotations(pod *corev1.Pod, serviceAccountTokenExpir
 			tokenExpiration = pkg.ValidateMinTokenExpiration(expiration)
 		}
 	}
-	awsSecretNameStr := ""
-	if awsSecretNameString, ok := pod.Annotations[awsSecretNameAnnotationKey]; ok {
-		klog.V(4).Infof("Aws Secre Name annotated: %s", awsSecretNameString)
-		awsSecretNameStr = awsSecretNameString
-	}
 
 	containersToSkip := getContainersToSkip(m.AnnotationDomain, pod)
 
-	return tokenExpiration, containersToSkip, awsSecretNameStr
+	return tokenExpiration, containersToSkip
 }
 
 // getPodSpecPatch gets the patch operation to be applied to the given Pod
@@ -491,12 +485,10 @@ func (m *Modifier) buildPodPatchConfig(pod *corev1.Pod) *podPatchConfig {
 	containerCredentialsPatchConfig := m.ContainerCredentialsConfig.Get(pod.Namespace, pod.Spec.ServiceAccountName)
 	if containerCredentialsPatchConfig != nil {
 		regionalSTS, tokenExpiration := m.Cache.GetCommonConfigurations(pod.Spec.ServiceAccountName, pod.Namespace)
-		tokenExpiration, containersToSkip, awsSecretNameStr := m.parsePodAnnotations(pod, tokenExpiration)
+		tokenExpiration, containersToSkip := m.parsePodAnnotations(pod, tokenExpiration)
 
 		tokenExpiration = m.addJitterToDefaultToken(tokenExpiration)
 		webhookPodCount.WithLabelValues("container_credentials").Inc()
-		var awsConfigPatchConfig *awsConfigPatchconfig
-		awsConfigPatchConfig = defineAwsConfigPatch(awsSecretNameStr, awsConfigPatchConfig)
 
 		return &podPatchConfig{
 			ContainersToSkip:                containersToSkip,
@@ -508,7 +500,7 @@ func (m *Modifier) buildPodPatchConfig(pod *corev1.Pod) *podPatchConfig {
 			TokenPath:                       containerCredentialsPatchConfig.TokenPath,
 			WebIdentityPatchConfig:          nil,
 			ContainerCredentialsPatchConfig: containerCredentialsPatchConfig,
-			AwsConfigPatchconfig:            awsConfigPatchConfig,
+			AwsConfigPatchconfig:            nil,
 		}
 	}
 
@@ -538,9 +530,12 @@ func (m *Modifier) buildPodPatchConfig(pod *corev1.Pod) *podPatchConfig {
 			return nil
 		}
 	}
-	tokenExpiration, containersToSkip, awsSecretNameStr := m.parsePodAnnotations(pod, response.TokenExpiration)
-	var awsConfigPatchConfig *awsConfigPatchconfig
-	awsConfigPatchConfig = defineAwsConfigPatch(awsSecretNameStr, awsConfigPatchConfig)
+	tokenExpiration, containersToSkip := m.parsePodAnnotations(pod, response.TokenExpiration)
+	var awsConfigPatchConfig = &awsConfigPatchconfig{
+		secretName: response.AwsConfigSecretName,
+		volName:    pkg.DefaultAwsConfigVolName,
+		mountPath:  pkg.DefaultAwsConfigMountPath,
+	}
 	klog.V(5).Infof("Value of roleArn after after cache retrieval for service account %s: %s", request.CacheKey(), response.RoleARN)
 	klog.V(5).Infof("Value of awsSecretName after after cache retrieval for service account %s: %s", request.CacheKey(), response.AwsConfigSecretName)
 	if response.RoleARN != "" && response.AwsConfigSecretName != "" {
@@ -586,22 +581,12 @@ func (m *Modifier) buildPodPatchConfig(pod *corev1.Pod) *podPatchConfig {
 			TokenPath:                       m.tokenName,
 			WebIdentityPatchConfig:          nil,
 			ContainerCredentialsPatchConfig: nil,
-			AwsConfigPatchconfig:            &awsConfigPatchconfig{secretName: response.AwsConfigSecretName, volName: pkg.DefaultAwsConfigVolName, mountPath: pkg.DefaultAwsConfigMountPath},
+			AwsConfigPatchconfig:            awsConfigPatchConfig,
 		}
 	}
 
 	// No mutations needed
 	return nil
-}
-
-func defineAwsConfigPatch(awsSecretNameStr string, awsConfigPatchConfig *awsConfigPatchconfig) *awsConfigPatchconfig {
-	if awsSecretNameStr != "" {
-		awsConfigPatchConfig = &awsConfigPatchconfig{secretName: awsSecretNameStr,
-			volName:   pkg.DefaultAwsConfigVolName,
-			mountPath: pkg.DefaultAwsConfigMountPath,
-		}
-	}
-	return awsConfigPatchConfig
 }
 
 func (m *Modifier) addJitterToDefaultToken(tokenExpiration int64) int64 {
