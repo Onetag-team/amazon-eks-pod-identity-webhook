@@ -346,7 +346,6 @@ func New(defaultAudience,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				sa := obj.(*v1.ServiceAccount)
-				klog.V(5).Infof("SA: %v", sa)
 				c.addSA(sa)
 			},
 			DeleteFunc: func(obj interface{}) {
