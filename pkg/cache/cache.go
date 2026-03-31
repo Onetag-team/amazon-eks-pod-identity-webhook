@@ -236,8 +236,6 @@ func (c *serviceAccountCache) addSA(sa *v1.ServiceAccount) {
 	}
 
 	awsConfigSecretNameStr, ok := sa.Annotations[c.annotationPrefix+"/"+pkg.AwsConfigSecretNameAnnotation]
-	klog.V(4).Infof("AWS SECRET: %s", awsConfigSecretNameStr)
-	klog.V(4).Infof("annotation: %s", c.annotationPrefix+"/"+pkg.AwsConfigSecretNameAnnotation)
 
 	if awsConfigSecretNameStr != "" {
 		entry.AwsConfigSecretName = awsConfigSecretNameStr
@@ -277,8 +275,6 @@ func (c *serviceAccountCache) setSA(name, namespace string, entry *Entry) {
 	defer c.mu.Unlock()
 
 	key := namespace + "/" + name
-	klog.V(5).Infof("Adding SA %q to SA cache: %+v", key, entry)
-	klog.V(5).Infof("aws-secret-name: %s", entry.AwsConfigSecretName)
 	c.saCache[key] = entry
 
 	c.notifications.broadcast(key)
