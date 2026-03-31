@@ -538,7 +538,7 @@ func (m *Modifier) buildPodPatchConfig(pod *corev1.Pod) *podPatchConfig {
 	}
 	klog.V(5).Infof("Value of roleArn after after cache retrieval for service account %s: %s", request.CacheKey(), response.RoleARN)
 	klog.V(5).Infof("Value of awsSecretName after after cache retrieval for service account %s: %s", request.CacheKey(), response.AwsConfigSecretName)
-	if response.RoleARN != "" && response.AwsConfigSecretName != "" {
+	/*if response.RoleARN != "" && response.AwsConfigSecretName != "" {
 		klog.V(4).Info("I'm in the 1st case")
 		webhookPodCount.WithLabelValues("sts_web_identity").Inc()
 		return &podPatchConfig{
@@ -553,7 +553,7 @@ func (m *Modifier) buildPodPatchConfig(pod *corev1.Pod) *podPatchConfig {
 			ContainerCredentialsPatchConfig: nil,
 			AwsConfigPatchconfig:            awsConfigPatchConfig,
 		}
-	} else if response.RoleARN != "" {
+	} else*/if response.RoleARN != "" {
 		klog.V(4).Info("I'm in the 2nd case")
 		webhookPodCount.WithLabelValues("sts_web_identity").Inc()
 		return &podPatchConfig{
